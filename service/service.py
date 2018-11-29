@@ -64,14 +64,14 @@ def send_to_list():
 
                     item_properties_metadata = {'__metadata': {'type': entity[LIST_ITEM_NAME]}}
                     values_to_send = {key: str(entity[key]) for key in keys_to_send}
-
                     item_properties = {**item_properties_metadata, **values_to_send}
+
                     list_object.add_item(item_properties)
                     ctx.execute_query()
                     entity['status'] = "OK: Sendt til {}".format(entity[LIST_NAME])
                 except Exception as e:
                     logging.error(e)
-                    entity['status'] = "ERROR: En feil oppstått: {}".format(e.message)
+                    entity['status'] = "ERROR: En feil oppstått: {}".format(e)
             else:
                 error = ctx_auth.get_last_error()
                 logging.error(error)
@@ -106,6 +106,29 @@ def get_from_list(list_name):
         ctx.load(items)
         ctx.execute_query()
         return Response(generate(items), mimetype='application/json')
+
+
+@APP.route('/get-site-users', methods=['GET'])
+def get_site_users():
+    """
+    Fetch SharepointUsers users
+    :return:
+    """
+    def generate(entities):
+        yield "["
+        for index, entity in enumerate(entities):
+            if index > 0:
+                yield ","
+            yield json.dumps(entity.properties)
+        yield ']'
+
+    ctx_auth = AuthenticationContext(URL)
+    if ctx_auth.acquire_token_for_user(USERNAME, PASSWORD):
+        ctx = ClientContext(URL, ctx_auth)
+        user_col = ctx.web.site_users
+        ctx.load(user_col)
+        ctx.execute_query()
+    return Response(generate(user_col), mimetype='application/json')
 
 
 if __name__ == '__main__':
