@@ -69,9 +69,11 @@ def send_to_list():
                     values_to_send = {key: str(entity[key]) for key in keys_to_send}
                     item_properties = {**item_properties_metadata, **values_to_send}
 
-                    existing_item = list_object.get_item_by_id(entity['ID'])
-                    ctx.load(existing_item)
-                    ctx.execute_query()
+                    existing_item = None
+                    if entity.get('ID'):
+                        existing_item = list_object.get_item_by_id(entity.get('ID'))
+                        ctx.load(existing_item)
+                        ctx.execute_query()
 
                     if not existing_item:
                         logging.info("Creating new item")
@@ -81,7 +83,7 @@ def send_to_list():
                         entity['sharepoint_item'] = new_item.properties
                     else:
                         logging.info("Existing item found")
-                        result = update_list_item(ctx, entity[LIST_NAME], entity['ID'], values_to_send)
+                        result = update_list_item(ctx, entity[LIST_NAME], entity.get('ID'), values_to_send)
                         if result.status_code > 299:
                             entity['status'] = "ERROR: EN feil oppstått {}".format(result.text)
                         else:
