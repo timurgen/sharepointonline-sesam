@@ -80,7 +80,7 @@ def send_to_list():
                             ctx.load(existing_item)
                             ctx.execute_query()
                         except Exception as ie:
-                            logging.warning("Search for ID resulted in an exception returned from Office 365 {}".format(ie))
+                            logging.warning("Søk etter ID resulterte i en feilmelding fra Office 365 {}".format(ie))
                             if ie.code == "-2147024809, System.ArgumentException" or ie.message == "Item does not exist. It may have been deleted by another user.":
                                 existing_item = None
                             else:
