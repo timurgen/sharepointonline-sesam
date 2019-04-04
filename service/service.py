@@ -65,15 +65,26 @@ def send_to_list():
                     ctx = ClientContext(URL, ctx_auth)
                     list_object = ctx.web.lists.get_by_title(entity[LIST_NAME])
 
-                    item_properties_metadata = {'__metadata': {'type': entity[LIST_ITEM_NAME]}}
+                    list_item_name = entity.get(LIST_ITEM_NAME)
+                    if list_item_name is None:
+                        item_properties_metadata = {}
+                    else:
+                        item_properties_metadata = {'__metadata': {'type': list_item_name}}
                     values_to_send = {key: str(entity[key]) for key in keys_to_send}
                     item_properties = {**item_properties_metadata, **values_to_send}
 
                     existing_item = None
                     if entity.get('ID'):
-                        existing_item = list_object.get_item_by_id(entity.get('ID'))
-                        ctx.load(existing_item)
-                        ctx.execute_query()
+                        try:
+                            existing_item = list_object.get_item_by_id(entity.get('ID'))
+                            ctx.load(existing_item)
+                            ctx.execute_query()
+                        except Exception as ie:
+                            logging.warning("Søk etter ID resulterte i en feilmelding fra Office 365 {}".format(ie))
+                            if ie.code == "-2147024809, System.ArgumentException" or ie.message == "Item does not exist. It may have been deleted by another user.":
+                                existing_item = None
+                            else:
+                                raise
 
                     if not existing_item:
                         logging.info("Creating new item")
@@ -88,6 +99,7 @@ def send_to_list():
                             entity['status'] = "ERROR: EN feil oppstått {}".format(result.text)
                         else:
                             entity['status'] = 'OK: updated successfully'
+
                 except Exception as e:
                     logging.error("something weird happens {}".format(e))
                     entity['status'] = "ERROR: En feil oppstått: {}".format(e)
