@@ -1,6 +1,8 @@
 # sharepointonline-sesam
 Sharepoint online source+sink for Sesam.io
 
+[![Build Status](https://travis-ci.org/sesam-community/sharepointonline-sesam.svg?branch=master)](https://travis-ci.org/sesam-community/sharepointonline-sesam)
+
 system setup
 ```json
 {
