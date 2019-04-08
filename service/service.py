@@ -60,7 +60,7 @@ def send_to_list():
             keys_to_send = entity['Keys']
 
             ctx_auth = AuthenticationContext(URL)
-            if ctx_auth.acquire_token_for_user(USERNAME, PASSWORD):
+            if ctx_auth.acquire_token_for_user(USERNAME, PASSWORD) and ctx_auth.provider.token is not None:
                 try:
                     ctx = ClientContext(URL, ctx_auth)
                     list_object = ctx.web.lists.get_by_title(entity[LIST_NAME])
@@ -80,8 +80,8 @@ def send_to_list():
                             ctx.load(existing_item)
                             ctx.execute_query()
                         except Exception as ie:
-                            logging.warning("Søk etter ID resulterte i en feilmelding fra Office 365 {}".format(ie))
-                            if ie.code == "-2147024809, System.ArgumentException" or ie.message == "Item does not exist. It may have been deleted by another user.":
+                            logging.warning("Item lookup by ID resulted in an exception from Office 365 {}".format(ie))
+                            if (hasattr(ie, 'code') and ie.code == "-2147024809, System.ArgumentException") or (hasattr(ie, 'message') and ie.message == "Item does not exist. It may have been deleted by another user."):
                                 existing_item = None
                             else:
                                 raise
@@ -90,23 +90,25 @@ def send_to_list():
                         logging.info("Creating new item")
                         new_item = list_object.add_item(item_properties)
                         ctx.execute_query()
-                        entity['status'] = "OK: Sendt til {}".format(entity[LIST_NAME])
+                        entity['status'] = "OK: Sent to {}".format(entity[LIST_NAME])
                         entity['sharepoint_item'] = new_item.properties
                     else:
                         logging.info("Existing item found")
                         result = update_list_item(ctx, entity[LIST_NAME], entity.get('ID'), values_to_send)
                         if result.status_code > 299:
-                            entity['status'] = "ERROR: EN feil oppstått {}".format(result.text)
+                            entity['status'] = "ERROR: An exception has occurred: {}".format(result.text)
                         else:
                             entity['status'] = 'OK: updated successfully'
 
                 except Exception as e:
-                    logging.error("something weird happens {}".format(e))
-                    entity['status'] = "ERROR: En feil oppstått: {}".format(e)
+                    logging.error("An exception has occurred: {}".format(e))
+                    entity['status'] = "ERROR: An exception has occurred: {}".format(e)
+                    raise
             else:
                 error = ctx_auth.get_last_error()
                 logging.error(error)
                 entity['status'] = "ERROR: {}".format(error)
+                raise Exception(error)
 
             yield json.dumps(entity)
         yield ']'
