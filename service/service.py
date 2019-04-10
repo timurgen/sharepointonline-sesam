@@ -50,13 +50,13 @@ def send_to_list():
 
     :return: list of processed entities where status attribute will be populated with result of operation
     """
-    entities = request.get_json()
+    request_entities = request.get_json()
 
     def generate(entities: list):
-        yield '['
+        result = '['
         for index, entity in enumerate(entities):
             if index > 0:
-                yield ","
+                result += ','
             keys_to_send = entity['Keys']
 
             ctx_auth = AuthenticationContext(URL)
@@ -94,9 +94,9 @@ def send_to_list():
                         entity['sharepoint_item'] = new_item.properties
                     else:
                         logging.info("Existing item found")
-                        result = update_list_item(ctx, entity[LIST_NAME], entity.get('ID'), values_to_send)
-                        if result.status_code > 299:
-                            entity['status'] = "ERROR: An exception has occurred: {}".format(result.text)
+                        update_result = update_list_item(ctx, entity[LIST_NAME], entity.get('ID'), values_to_send)
+                        if update_result.status_code > 299:
+                            entity['status'] = "ERROR: An exception has occurred: {}".format(update_result.text)
                         else:
                             entity['status'] = 'OK: updated successfully'
 
@@ -110,10 +110,11 @@ def send_to_list():
                 entity['status'] = "ERROR: {}".format(error)
                 raise Exception(error)
 
-            yield json.dumps(entity)
-        yield ']'
+            result += str(json.dumps(entity))
+        result += ']'
+        return result
 
-    return Response(generate(entities), mimetype='application/json')
+    return Response(generate(request_entities), mimetype='application/json')
 
 
 @APP.route('/get-from-list/<list_name>', methods=['GET'])
