@@ -110,7 +110,7 @@ def send_to_list():
                         logging.info("Existing item found")
                         update_result = update_list_item(ctx, entity[LIST_NAME], entity.get('ID'), values_to_send)
                         if update_result.status_code > 299:
-                            entity['status'] = "ERROR: An exception has occurred: {}".format(update_result.text)
+                            raise Exception(update_result.text)
                         else:
                             entity['status'] = 'OK: updated successfully'
 
