@@ -53,15 +53,23 @@ def send_to_list():
     request_entities = request.get_json()
 
     def generate(entities: list):
+        ctx_auth = None
+        token_acquired = False
+        ctx = None
+        values_to_send = None
+        item_properties = None
+        list_object = None
         result = '['
         for index, entity in enumerate(entities):
             if index > 0:
                 result += ','
-            keys_to_send = entity['Keys']
 
-            ctx_auth = AuthenticationContext(URL)
-            if ctx_auth.acquire_token_for_user(USERNAME, PASSWORD) and ctx_auth.provider.token is not None:
-                try:
+            if ctx_auth is None:
+                ctx_auth = AuthenticationContext(URL)
+
+            if token_acquired is False:
+                ctx_auth.acquire_token_for_user(USERNAME, PASSWORD)
+                if ctx_auth.provider.token is not None:
                     ctx = ClientContext(URL, ctx_auth)
                     list_object = ctx.web.lists.get_by_title(entity[LIST_NAME])
 
@@ -70,8 +78,14 @@ def send_to_list():
                         item_properties_metadata = {}
                     else:
                         item_properties_metadata = {'__metadata': {'type': list_item_name}}
+                    keys_to_send = entity['Keys']
                     values_to_send = {key: str(entity[key]) for key in keys_to_send}
                     item_properties = {**item_properties_metadata, **values_to_send}
+
+                    token_acquired = True
+
+            if token_acquired:
+                try:
 
                     existing_item = None
                     if entity.get('ID'):
