@@ -58,11 +58,11 @@ def send_to_list():
         ctx = None
         values_to_send = None
         item_properties = None
+        list_object = None
         result = '['
         for index, entity in enumerate(entities):
             if index > 0:
                 result += ','
-            keys_to_send = entity['Keys']
 
             if ctx_auth is None:
                 ctx_auth = AuthenticationContext(URL)
@@ -78,6 +78,7 @@ def send_to_list():
                         item_properties_metadata = {}
                     else:
                         item_properties_metadata = {'__metadata': {'type': list_item_name}}
+                    keys_to_send = entity['Keys']
                     values_to_send = {key: str(entity[key]) for key in keys_to_send}
                     item_properties = {**item_properties_metadata, **values_to_send}
 
