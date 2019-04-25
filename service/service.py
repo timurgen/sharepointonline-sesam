@@ -70,6 +70,10 @@ def send_to_list():
                     ctx = ClientContext(URL, ctx_auth)
                     list_object = ctx.web.lists.get_by_title(entity[LIST_NAME])
 
+                    token_acquired = True
+
+            if token_acquired:
+                try:
                     list_item_name = entity.get(LIST_ITEM_NAME)
                     if list_item_name is None:
                         item_properties_metadata = {}
@@ -78,11 +82,6 @@ def send_to_list():
                     keys_to_send = entity['Keys']
                     values_to_send = {key: str(entity[key]) for key in keys_to_send}
                     item_properties = {**item_properties_metadata, **values_to_send}
-
-                    token_acquired = True
-
-            if token_acquired:
-                try:
 
                     existing_item = None
                     if entity.get('ID'):
