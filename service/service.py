@@ -52,18 +52,15 @@ def send_to_list():
     """
     request_entities = request.get_json()
 
-    def generate(entities: list):
+    def post_entities(entities: list):
         ctx_auth = None
         token_acquired = False
         ctx = None
         values_to_send = None
         item_properties = None
         list_object = None
-        result = '['
-        for index, entity in enumerate(entities):
-            if index > 0:
-                result += ','
 
+        for index, entity in enumerate(entities):
             if ctx_auth is None:
                 ctx_auth = AuthenticationContext(URL)
 
@@ -73,6 +70,10 @@ def send_to_list():
                     ctx = ClientContext(URL, ctx_auth)
                     list_object = ctx.web.lists.get_by_title(entity[LIST_NAME])
 
+                    token_acquired = True
+
+            if token_acquired:
+                try:
                     list_item_name = entity.get(LIST_ITEM_NAME)
                     if list_item_name is None:
                         item_properties_metadata = {}
@@ -81,11 +82,6 @@ def send_to_list():
                     keys_to_send = entity['Keys']
                     values_to_send = {key: str(entity[key]) for key in keys_to_send}
                     item_properties = {**item_properties_metadata, **values_to_send}
-
-                    token_acquired = True
-
-            if token_acquired:
-                try:
 
                     existing_item = None
                     if entity.get('ID'):
@@ -110,25 +106,29 @@ def send_to_list():
                         logging.info("Existing item found")
                         update_result = update_list_item(ctx, entity[LIST_NAME], entity.get('ID'), values_to_send)
                         if update_result.status_code > 299:
-                            entity['status'] = "ERROR: An exception has occurred: {}".format(update_result.text)
+                            raise Exception(update_result.text)
                         else:
                             entity['status'] = 'OK: updated successfully'
 
                 except Exception as e:
                     logging.error("An exception has occurred: {}".format(e))
                     entity['status'] = "ERROR: An exception has occurred: {}".format(e)
-                    raise
+                    error_message = "An exception occurred during processing of current entity: {0} {1} ({2}".format(e.errno, e.strerror, json.dumps(entity))
+                    raise Exception(error_message)
             else:
                 error = ctx_auth.get_last_error()
                 logging.error(error)
                 entity['status'] = "ERROR: {}".format(error)
                 raise Exception(error)
 
-            result += str(json.dumps(entity))
-        result += ']'
-        return result
+        return True
 
-    return Response(generate(request_entities), mimetype='application/json')
+    status = post_entities(request_entities)
+
+    if status:
+        return Response(status=200, response="{'status': 'success'}", mimetype='application/json')
+    else:
+        return Response(status=500, response="An error occurred!")
 
 
 @APP.route('/get-from-list/<list_name>', methods=['GET'])
