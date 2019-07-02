@@ -12,7 +12,8 @@ system setup
     "environment": {
       "SP_PASSWORD": "$SECRET(sp-password)",
       "SP_URL": "$ENV(sp-url)",
-      "SP_USERNAME": "$ENV(sp-username)"
+      "SP_USERNAME": "$ENV(sp-username)",
+      "SP_LIST_SIZE": "100"
     },
     "image": "<docker image name>",
     "port": 5000
@@ -54,3 +55,4 @@ pipe setup
   }
 }
 ```
+The SP_LIST_SIZE is defaulted to 100 elements, but you can bump the value up as needed.
