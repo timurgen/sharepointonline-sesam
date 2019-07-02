@@ -20,6 +20,7 @@ PASSWORD = os.environ.get('SP_PASSWORD')
 LIST_NAME = os.environ.get('SP_LIST_NAME', 'ListName')
 # Key for entity attribute containing name of list item
 LIST_ITEM_NAME = os.environ.get('SP_LIST_ITEM_NAME', 'ListItemEntityTypeFullName')
+LIST_SIZE = int(os.environ.get('SP_LIST_SIZE', '100'))
 
 logging.getLogger().setLevel(os.environ.get("LOG_LEVEL", logging.DEBUG))
 
@@ -150,7 +151,7 @@ def get_from_list(list_name):
     if ctx_auth.acquire_token_for_user(USERNAME, PASSWORD):
         ctx = ClientContext(URL, ctx_auth)
         list_object = ctx.web.lists.get_by_title(list_name)
-        items = list_object.get_items()
+        items = list_object.get_items().top(LIST_SIZE)
         ctx.load(items)
         ctx.execute_query()
         return Response(generate(items), mimetype='application/json')
