@@ -27,6 +27,8 @@ LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
 
 THREADS = int(os.environ.get('THREADS', '10'))
 
+PROCESS_DELETED = os.environ.get('PROCESS_DELETED_ENTITIES', 'true').lower() == 'true'
+
 APP = Flask(__name__)
 
 if not URL or not USERNAME or not PASSWORD:
@@ -69,6 +71,10 @@ def send_to_list():
             raise Exception(error)
 
         for _, entity in enumerate(entities):
+            if entity['_deleted'] and not PROCESS_DELETED:
+                logging.debug(f"entity {entity['_id']} marked as deleted and will not be processed")
+                continue
+
             list_object = ctx.web.lists.get_by_title(entity[LIST_NAME])
 
             try:
