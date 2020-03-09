@@ -20,8 +20,14 @@ PASSWORD = os.environ.get('SP_PASSWORD')
 LIST_NAME = os.environ.get('SP_LIST_NAME', 'ListName')
 # Key for entity attribute containing name of list item
 LIST_ITEM_NAME = os.environ.get('SP_LIST_ITEM_NAME', 'ListItemEntityTypeFullName')
+LIST_SIZE = int(os.environ.get('SP_LIST_SIZE', '100'))
 
-logging.getLogger().setLevel(os.environ.get("LOG_LEVEL", logging.DEBUG))
+PORT = int(os.environ.get('PORT', '5000'))
+LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
+
+THREADS = int(os.environ.get('THREADS', '10'))
+
+PROCESS_DELETED = os.environ.get('PROCESS_DELETED_ENTITIES', 'true').lower() == 'true'
 
 APP = Flask(__name__)
 
@@ -50,68 +56,68 @@ def send_to_list():
 
     :return: list of processed entities where status attribute will be populated with result of operation
     """
-    entities = request.get_json()
+    request_entities = request.get_json()
 
-    def generate(entities: list):
-        yield '['
-        for index, entity in enumerate(entities):
-            if index > 0:
-                yield ","
-            keys_to_send = entity['Keys']
+    def post_entities(entities: list):
 
-            ctx_auth = AuthenticationContext(URL)
-            if ctx_auth.acquire_token_for_user(USERNAME, PASSWORD):
-                try:
-                    ctx = ClientContext(URL, ctx_auth)
-                    list_object = ctx.web.lists.get_by_title(entity[LIST_NAME])
+        ctx_auth = AuthenticationContext(URL)
 
-                    list_item_name = entity.get(LIST_ITEM_NAME)
-                    if list_item_name is None:
-                        item_properties_metadata = {}
-                    else:
-                        item_properties_metadata = {'__metadata': {'type': list_item_name}}
-                    values_to_send = {key: str(entity[key]) for key in keys_to_send}
-                    item_properties = {**item_properties_metadata, **values_to_send}
+        ctx_auth.acquire_token_for_user(USERNAME, PASSWORD)
+        if ctx_auth.provider.token:
+            ctx = ClientContext(URL, ctx_auth)
+        else:
+            error = ctx_auth.get_last_error()
+            logging.error(error)
+            raise Exception(error)
 
-                    existing_item = None
-                    if entity.get('ID'):
-                        try:
-                            existing_item = list_object.get_item_by_id(entity.get('ID'))
-                            ctx.load(existing_item)
-                            ctx.execute_query()
-                        except Exception as ie:
-                            logging.warning("Søk etter ID resulterte i en feilmelding fra Office 365 {}".format(ie))
-                            if ie.code == "-2147024809, System.ArgumentException" or ie.message == "Item does not exist. It may have been deleted by another user.":
-                                existing_item = None
-                            else:
-                                raise
+        for _, entity in enumerate(entities):
+            if entity['_deleted'] and not PROCESS_DELETED:
+                logging.debug(f"entity {entity['_id']} marked as deleted and will not be processed")
+                continue
 
-                    if not existing_item:
-                        logging.info("Creating new item")
-                        new_item = list_object.add_item(item_properties)
+            list_object = ctx.web.lists.get_by_title(entity[LIST_NAME])
+
+            try:
+                list_item_name = entity.get(LIST_ITEM_NAME)
+                if list_item_name is None:
+                    item_properties_metadata = {}
+                else:
+                    item_properties_metadata = {'__metadata': {'type': list_item_name}}
+                keys_to_send = entity['Keys']
+                values_to_send = {key: str(entity[key]) for key in keys_to_send}
+                item_properties = {**item_properties_metadata, **values_to_send}
+
+                existing_item = None
+                if entity.get('ID'):
+                    try:
+                        existing_item = list_object.get_item_by_id(entity.get('ID'))
+                        ctx.load(existing_item)
                         ctx.execute_query()
-                        entity['status'] = "OK: Sendt til {}".format(entity[LIST_NAME])
-                        entity['sharepoint_item'] = new_item.properties
-                    else:
-                        logging.info("Existing item found")
-                        result = update_list_item(ctx, entity[LIST_NAME], entity.get('ID'), values_to_send)
-                        if result.status_code > 299:
-                            entity['status'] = "ERROR: EN feil oppstått {}".format(result.text)
+                    except Exception as ie:
+                        logging.warning("Item lookup by ID resulted in an exception from Office 365 {}".format(ie))
+                        if (hasattr(ie, 'code') and ie.code == "-2147024809, System.ArgumentException") or (
+                                hasattr(ie,
+                                        'message') and ie.message == "Item does not exist. It may have been deleted by another user."):
+                            existing_item = None
                         else:
-                            entity['status'] = 'OK: updated successfully'
+                            raise
 
-                except Exception as e:
-                    logging.error("something weird happens {}".format(e))
-                    entity['status'] = "ERROR: En feil oppstått: {}".format(e)
-            else:
-                error = ctx_auth.get_last_error()
-                logging.error(error)
-                entity['status'] = "ERROR: {}".format(error)
+                if not existing_item:
+                    logging.info("Creating new item")
+                    list_object.add_item(item_properties)
+                    ctx.execute_query()
+                else:
+                    logging.info("Existing item found")
+                    update_result = update_list_item(ctx, entity[LIST_NAME], entity.get('ID'), values_to_send)
+                    update_result.raise_for_status()
 
-            yield json.dumps(entity)
-        yield ']'
+            except Exception as e:
+                error_message = f"An exception occurred during processing of an entity: {e} ({json.dumps(entity)}"
+                logging.error(error_message)
+                raise Exception(error_message)
 
-    return Response(generate(entities), mimetype='application/json')
+    post_entities(request_entities)
+    return Response(status=200, response="{'status': 'success'}", mimetype='application/json')
 
 
 @APP.route('/get-from-list/<list_name>', methods=['GET'])
@@ -121,6 +127,7 @@ def get_from_list(list_name):
     :param list_name:
     :return:
     """
+
     def generate(entities):
         yield "["
         for index, entity in enumerate(entities):
@@ -133,7 +140,7 @@ def get_from_list(list_name):
     if ctx_auth.acquire_token_for_user(USERNAME, PASSWORD):
         ctx = ClientContext(URL, ctx_auth)
         list_object = ctx.web.lists.get_by_title(list_name)
-        items = list_object.get_items()
+        items = list_object.get_items().top(LIST_SIZE)
         ctx.load(items)
         ctx.execute_query()
         return Response(generate(items), mimetype='application/json')
@@ -145,6 +152,7 @@ def get_site_users():
     Fetch SharepointUsers users
     :return:
     """
+
     def generate(entities):
         yield "["
         for index, entity in enumerate(entities):
@@ -184,4 +192,25 @@ def update_list_item(context, list_title, item_id, values_to_send):
 
 
 if __name__ == '__main__':
-    APP.run(debug=logging.getLogger().isEnabledFor(logging.DEBUG), threaded=True, host='0.0.0.0', port=5000)
+    logging.basicConfig(level=logging.getLevelName(LOG_LEVEL))
+
+    IS_DEBUG_ENABLED = logging.getLogger().isEnabledFor(logging.DEBUG)
+
+    if IS_DEBUG_ENABLED:
+        APP.run(debug=IS_DEBUG_ENABLED, host='0.0.0.0', port=PORT)
+    else:
+        import cherrypy
+
+        cherrypy.tree.graft(APP, '/')
+        cherrypy.config.update({
+            'environment': 'production',
+            'engine.autoreload_on': True,
+            'log.screen': False,
+            'server.socket_port': PORT,
+            'server.socket_host': '0.0.0.0',
+            'server.thread_pool': THREADS,
+            'server.max_request_body_size': 0
+        })
+
+        cherrypy.engine.start()
+        cherrypy.engine.block()
